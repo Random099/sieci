@@ -111,7 +111,6 @@ void genErrorsR(const std::string READ_FILENAME, const double PROBABILITY){
     uint8_t inByte;
     std::vector<std::bitset<8>> msg;
     std::mt19937 gen;
-    const double RANGE {100/PROBABILITY};
     if(readFile.is_open() && writeFile.is_open()){
         readFile >> std::noskipws;
         while(readFile >> inByte)
