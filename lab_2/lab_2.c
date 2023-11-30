@@ -23,6 +23,7 @@ void shuffle(struct Packet* array, size_t n) {
         size_t i;
         for (i = n - 1; i > 0; i--) {
             size_t j = (unsigned int) (rand()%i);
+            printf("sz: %i\n", j);
             struct Packet t = array[j];
             array[j] = array[i];
             array[i] = t;
@@ -32,7 +33,8 @@ void shuffle(struct Packet* array, size_t n) {
 
 unsigned char* strToDecStr(unsigned char* string, unsigned char* dst){
     for(int i = 0; i < strlen(string); i++){
-        unsigned char* temp = malloc(sizeof(unsigned char)*2);
+        unsigned char* temp = (unsigned char*)malloc(sizeof(unsigned char)*4);
+        temp[0] = 0x00;
         sprintf(temp, "%d", string[i]);
         strcat(dst, temp);
         strcat(dst, " ");
@@ -44,7 +46,7 @@ unsigned char* strToDecStr(unsigned char* string, unsigned char* dst){
 int main(){
     FILE* dataFile = fopen("test.bin", "wb");
     if (dataFile != NULL){
-        unsigned char data[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+        unsigned char data[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
         fwrite(data, sizeof(data), 1, dataFile);
         fclose(dataFile);
     }
@@ -80,18 +82,21 @@ int main(){
         buffer[bufferIdx] = readPacket;
         bufferIdx++;
     }
+
     printf("[Original]:\n");
     for (int i = 0; i < bufferIdx; i++){
-        unsigned char* printPtr = (unsigned char*)malloc(3 * sizeof(unsigned char));
+        unsigned char* printPtr = (unsigned char*)malloc(9 * sizeof(unsigned char));
         printPtr[0] = 0x00;
         printf("id: %08d byte count: %08d data: %s\n", buffer[i].id, buffer[i].byteCount, strToDecStr(buffer[i].data, printPtr));
         free(printPtr);
     }
 
+
+
     shuffle(buffer, (fileSize + 1) / 2);
     printf("[Shuffled]:\n");
     for (int i = 0; i < bufferIdx; i++){
-        unsigned char* printPtr = (unsigned char*)malloc(3 * sizeof(unsigned char));
+        unsigned char* printPtr = (unsigned char*)malloc(9 * sizeof(unsigned char));
         printPtr[0] = 0x00;
         printf("id: %08d byte count: %08d data: %s\n", buffer[i].id, buffer[i].byteCount, strToDecStr(buffer[i].data, printPtr));
         free(printPtr);
