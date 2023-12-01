@@ -4,12 +4,15 @@
 #include <string.h>
 #include <sys/time.h>
 
+#pragma pack 1
 #define ARRAYSIZE(a) (sizeof(a)/sizeof(a[0]))
+#define PACKET_BYTES 3 //Number of data bytes per packet + null
+#define CHUNK_SIZE (PACKET_BYTES-1)
 
 struct Packet{
     uint32_t id;
     uint32_t byteCount;
-    unsigned char data[3];
+    unsigned char data[PACKET_BYTES];
 };
 
 void shuffle(struct Packet* array, size_t n) {
@@ -18,17 +21,39 @@ void shuffle(struct Packet* array, size_t n) {
     int usec = tv.tv_usec;
     srand(usec);
 
-
     if (n > 1) {
-        size_t i;
-        for (i = n - 1; i > 0; i--) {
+        for (size_t i = n - 1; i > 0; i--) {
             size_t j = (unsigned int) (rand()%i);
-            printf("sz: %i\n", j);
             struct Packet t = array[j];
             array[j] = array[i];
             array[i] = t;
         }
     }
+}
+
+void reconstructFile(struct Packet* buffer, size_t bufferSize){
+    FILE* writeFile = fopen("transmitted_data.bin", "wb");
+    struct Packet* readPackets = (struct Packet*)malloc(sizeof(struct Packet) * bufferSize);
+    int readPacketCount = 0;
+    uint32_t currentPacketIdx = 1;
+    size_t j = 0;
+    while(currentPacketIdx <= bufferSize){
+        if(j < bufferSize){
+            readPackets[j] = buffer[j];
+            readPackets[j].id = buffer[j].id;
+            readPackets[j].byteCount = buffer[j].byteCount;
+            strncpy(readPackets[j].data, buffer[j].data, buffer[j].byteCount);
+            readPackets[j].data[2] = 0x00;
+            ++j;
+        }
+        for(int i = 0; i < j; ++i){
+            if(readPackets[i].id == currentPacketIdx){
+                fwrite(readPackets[i].data, sizeof(readPackets[i].data)-1, 1, writeFile);
+                ++currentPacketIdx;
+            }
+        }
+    }
+    free(readPackets);
 }
 
 unsigned char* strToDecStr(unsigned char* string, unsigned char* dst){
@@ -46,7 +71,8 @@ unsigned char* strToDecStr(unsigned char* string, unsigned char* dst){
 int main(){
     FILE* dataFile = fopen("test.bin", "wb");
     if (dataFile != NULL){
-        unsigned char data[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+        unsigned char data[] = {0xFE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+        printf("%i", sizeof(data));
         fwrite(data, sizeof(data), 1, dataFile);
         fclose(dataFile);
     }
@@ -60,48 +86,53 @@ int main(){
     printf("Filesize: %i\n", fileSize);
 
     //Allocate buffer
-    struct Packet* buffer = (struct Packet*)malloc(sizeof(struct Packet) * ((fileSize + 1) / 2));
+    if(CHUNK_SIZE > 1 && (fileSize % CHUNK_SIZE != 0))
+        fileSize = fileSize + CHUNK_SIZE;
+    struct Packet* buffer = (struct Packet*)malloc(sizeof(struct Packet) * (fileSize / CHUNK_SIZE));
 
     //Read file into buffer of desired form packets
-    int bufferIdx = 0;
-    size_t chunkSize = sizeof(readPacket.data) - 1;
-    for(; (fread(&readPacket.data, chunkSize, 1, fp) == 1); ++bufferIdx){
+    size_t bufferIdx = 0;
+    for(; (fread(&readPacket.data, CHUNK_SIZE, 1, fp) == 1); ++bufferIdx){
         readPacket.id = bufferIdx+1;
-        readPacket.byteCount = chunkSize;
+        readPacket.byteCount = CHUNK_SIZE;
         buffer[bufferIdx] = readPacket;
-        buffer[bufferIdx].data[ARRAYSIZE(readPacket.data) - 1] = 0x00;
+        buffer[bufferIdx].data[CHUNK_SIZE] = 0x00;
     }
 
     //Check for remaining bytes
-    int bytesLeft = fileSize - (bufferIdx * 2);
-    if(bytesLeft != 0){
-        fread(&readPacket.data, bytesLeft, 1, fp);
-        readPacket.data[bytesLeft] = 0x00;
-        readPacket.id = bufferIdx+1;
-        readPacket.byteCount = bytesLeft;
-        buffer[bufferIdx] = readPacket;
-        bufferIdx++;
+    if(CHUNK_SIZE > 1 && (fileSize % CHUNK_SIZE != 0)){
+        size_t bytesLeft = (fileSize - CHUNK_SIZE) - (bufferIdx * CHUNK_SIZE);
+        if(bytesLeft > 0){
+            fread(&readPacket.data, bytesLeft, 1, fp);
+            readPacket.data[bytesLeft] = 0x00;
+            readPacket.id = bufferIdx+1;
+            readPacket.byteCount = bytesLeft;
+            buffer[bufferIdx] = readPacket;
+            bufferIdx++;
+        }
     }
 
     printf("[Original]:\n");
-    for (int i = 0; i < bufferIdx; i++){
-        unsigned char* printPtr = (unsigned char*)malloc(9 * sizeof(unsigned char));
+    for (size_t i = 0; i < bufferIdx; i++){
+        unsigned char* printPtr = (unsigned char*)malloc( ((4 * CHUNK_SIZE) + 1) * sizeof(unsigned char));
         printPtr[0] = 0x00;
-        printf("id: %08d byte count: %08d data: %s\n", buffer[i].id, buffer[i].byteCount, strToDecStr(buffer[i].data, printPtr));
+        printf("id: %p byte count: %p\ndata: ", &buffer[i].id, &buffer[i].byteCount);
+        for(size_t j = 0; j < CHUNK_SIZE; ++j)
+            printf("%p ", &buffer[i].data[j]);
         free(printPtr);
+        printf("\n");
     }
 
-
-
-    shuffle(buffer, (fileSize + 1) / 2);
+    shuffle(buffer, fileSize / CHUNK_SIZE);
     printf("[Shuffled]:\n");
-    for (int i = 0; i < bufferIdx; i++){
-        unsigned char* printPtr = (unsigned char*)malloc(9 * sizeof(unsigned char));
+    for (size_t i = 0; i < bufferIdx; i++){
+        unsigned char* printPtr = (unsigned char*)malloc( ((4 * CHUNK_SIZE) + 1) * sizeof(unsigned char));
         printPtr[0] = 0x00;
         printf("id: %08d byte count: %08d data: %s\n", buffer[i].id, buffer[i].byteCount, strToDecStr(buffer[i].data, printPtr));
         free(printPtr);
     }
 
+    reconstructFile(buffer, fileSize / CHUNK_SIZE);
     free(buffer);
     fclose(fp);
     return 0;
