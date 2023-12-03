@@ -6,13 +6,12 @@
 
 #pragma pack 1
 #define ARRAYSIZE(a) (sizeof(a)/sizeof(a[0]))
-#define PACKET_BYTES 3 //Number of data bytes per packet + null
-#define CHUNK_SIZE (PACKET_BYTES-1)
+#define CHUNK_SIZE 2 //Bytes of data per packet
 
 struct Packet{
     uint32_t id;
     uint32_t byteCount;
-    unsigned char data[PACKET_BYTES];
+    unsigned char data[CHUNK_SIZE + 1];
 };
 
 void shuffle(struct Packet* array, size_t n) {
@@ -37,6 +36,7 @@ void reconstructFile(struct Packet* buffer, size_t bufferSize){
     int readPacketCount = 0;
     uint32_t currentPacketIdx = 1;
     size_t j = 0;
+    
     while(currentPacketIdx <= bufferSize){
         if(j < bufferSize){
             readPackets[j] = buffer[j];
@@ -79,7 +79,7 @@ int main(){
     FILE* fp = fopen("test.bin", "rb");
     struct Packet readPacket;
 
-    //Calculate file size and return to beginning
+    //Calculate file size and move pointer to beginning
     fseek(fp, 0L, SEEK_END);
     long fileSize = ftell(fp);
     rewind(fp);
