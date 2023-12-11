@@ -5,8 +5,6 @@
 #include <vector>
 #include <iomanip>
 
-#pragma pack (1)
-
 constexpr uint32_t MAX_PACKET_SIZE = 3;
 
 struct Packet
